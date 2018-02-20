@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <commdlg.h>
+#include <timeapi.h>
 #include "pixeleditor.cpp"
 #include "win32_pixeleditor.h"
 
@@ -257,6 +258,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CmdLine, int CmdShow)
 		return 2;
 	}
 
+	timeBeginPeriod(1);
 	struct game_screen_buffer ScreenBuffer = {0};
 	GlobalScreenBuffer = &ScreenBuffer;
 	struct win32_window_dimensions WindowDims = Win32GetWindowDimensions(Window);
