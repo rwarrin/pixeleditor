@@ -88,6 +88,8 @@ struct app_input
 			struct input_button_state ButtonSave;
 			struct input_button_state ButtonReset;
 			struct input_button_state ButtonEraser;
+			struct input_button_state ButtonQuickSwitch;
+			struct input_button_state ButtonEyeDropper;
 		};
 	};
 };
@@ -167,7 +169,8 @@ struct app_state
 	v2 EditingAreaSize;
 	v2 EditingAreaMapOffset;
 
-	v4 ColorPickerButton;
+	struct custom_color_button QuickSwitchColor;
+	struct custom_color_button ColorPickerButton;
 	bool32 ColorPickerButtonClicked;
 	v4 PixelColor;
 

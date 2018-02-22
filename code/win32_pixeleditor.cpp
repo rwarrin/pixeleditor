@@ -152,6 +152,14 @@ Win32ProcessPendingMessages(struct app_input *Input)
 					{
 						Win32ProcessInputMessage(&Input->ButtonEraser, IsDown);
 					}
+					if(VKCode == 'Q')
+					{
+						Win32ProcessInputMessage(&Input->ButtonQuickSwitch, IsDown);
+					}
+					if(VKCode == VK_SPACE)
+					{
+						Win32ProcessInputMessage(&Input->ButtonEyeDropper, IsDown);
+					}
 				}
 			} break;
 			case WM_MOUSEWHEEL:
@@ -166,27 +174,6 @@ Win32ProcessPendingMessages(struct app_input *Input)
 			} break;
 		}
 	}
-}
-
-static void
-Win32SetPixelMapData(struct app_state *AppState, uint32 Width, uint32 Height, real32 Zoom)
-{
-	struct app_state OldAppState = *AppState;
-
-	AppState->PixelMapWidth = Width;
-	AppState->PixelMapHeight = Height;
-	AppState->PixelMapZoom = Zoom;
-	AppState->MinPixelMapZoom = Zoom;
-
-	uint32 PixelMapSize = AppState->PixelMapWidth * AppState->PixelMapHeight;
-	v4 *NewPixelMap = (v4 *)VirtualAlloc(0, PixelMapSize * sizeof(v4), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-
-	if(AppState->PixelMap)
-	{
-		CopyMemory(NewPixelMap, AppState->PixelMap, (OldAppState.PixelMapWidth * OldAppState.PixelMapHeight) * sizeof(v4));
-	}
-
-	AppState->PixelMap = NewPixelMap;
 }
 
 PLATFORM_WRITE_FILE(Win32WriteFile)
@@ -272,14 +259,6 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CmdLine, int CmdShow)
 	AppState.PlatformWriteFile = Win32WriteFile;
 	AppState.PlatformAllocateMemory = Win32AllocateMemory;
 	AppState.PlatformFreeMemory = Win32FreeMemory;
-	AppState.EditingAreaSize = V2(700.0f, 700.0f);
-	AppState.EditingAreaOffset = V2(80.0f, 10.0f);
-	AppState.ColorPickerButton = V4(AppState.EditingAreaOffset.x,
-									AppState.EditingAreaOffset.y + AppState.EditingAreaSize.y + 10,
-									64, 64);
-	AppState.PixelColor = V4(0xff, 0x00, 0x00, 0xff);
-	Win32SetPixelMapData(&AppState, 32, 32, ((real32)AppState.EditingAreaSize.x / (real32)32.0f));
-	AppState.CustomColorDims = V2(30.0f, 30.0f);
 
 	COLORREF CustomColors[16] = {0};
 	GlobalRunning = true;

@@ -1,13 +1,33 @@
 #include "pixeleditor.h"
 
+static inline union v4
+U32ToV4Pixel(uint32 Color)
+{
+	union v4 Result = {0};
+	Result.a = (Color & (0xff << 24));
+	Result.r = (Color & (0xff << 16));
+	Result.g = (Color & (0xff << 8));
+	Result.b = (Color & (0xff << 0));
+
+	return(Result);
+}
+
+static inline uint32
+V4ToU32Pixel(union v4 Color)
+{
+	uint32 Result = 0;
+	Result = ( ((int32)Color.a << 24) |
+			   ((int32)Color.r << 16) |
+			   ((int32)Color.g << 8) |
+			   ((int32)Color.b << 0) );
+
+	return(Result);
+}
+
 static void
 ClearScreenToColor(struct game_screen_buffer *Buffer, union v4 Color)
 {
-	uint32 PixelColor = ( ((int32)Color.a << 24) |
-						  ((int32)Color.r << 16) |
-						  ((int32)Color.g << 8) |
-						  ((int32)Color.b << 0) );
-
+	uint32 PixelColor = V4ToU32Pixel(Color);
 	uint8 *Base = (uint8 *)Buffer->BitmapMemory;
 	for(uint32 Y = 0; Y < Buffer->Height; ++Y)
 	{
@@ -36,11 +56,7 @@ DrawRectangle(struct game_screen_buffer *Buffer, uint32 XPos, uint32 YPos,
 	if(MaxX < MinX) { MaxX = MinX; }
 	if(MaxY < MinY) { MaxY = MinY; }
 
-	uint32 PixelColor = ( ((int32)Color.a << 24) |
-						  ((int32)Color.r << 16) |
-						  ((int32)Color.g << 8) |
-						  ((int32)Color.b << 0) );
-
+	uint32 PixelColor = V4ToU32Pixel(Color);
 	uint8 *Row = ((uint8 *)Buffer->BitmapMemory + (MinY * Buffer->Pitch) + (MinX * Buffer->BytesPerPixel));
 	for(uint32 Y = MinY; Y < MaxY; ++Y)
 	{
@@ -78,11 +94,7 @@ DrawRectangleWithBounds(struct game_screen_buffer *Buffer,
 	if(MaxX < MinX) { MaxX = MinX; }
 	if(MaxY < MinY) { MaxY = MinY; }
 
-	uint32 PixelColor = ( ((int32)Color.a << 24) |
-						  ((int32)Color.r << 16) |
-						  ((int32)Color.g << 8) |
-						  ((int32)Color.b << 0) );
-
+	uint32 PixelColor = V4ToU32Pixel(Color);
 	uint8 *Row = ((uint8 *)Buffer->BitmapMemory + (MinY * Buffer->Pitch) + (MinX * Buffer->BytesPerPixel));
 	for(uint32 Y = MinY; Y < MaxY; ++Y)
 	{
@@ -102,19 +114,31 @@ DrawRectangleWithBounds(struct game_screen_buffer *Buffer,
 	}
 }
 
-static void
-SetPixelMapPixelColor(struct app_state *AppState, real32 X, real32 Y, union v4 Color)
+static inline union v4 *
+GetPixelMapPixelColor(struct app_state *AppState, real32 X, real32 Y)
 {
+	union v4 *Result = 0;
+
 	int32 MouseX = (int32)X;
 	int32 MouseY = (int32)Y;
-
 	int32 GridX = ((MouseX - AppState->EditingAreaOffset.x) / AppState->PixelMapZoom) - AppState->EditingAreaMapOffset.x;
 	int32 GridY = ((MouseY - AppState->EditingAreaOffset.y) / AppState->PixelMapZoom) - AppState->EditingAreaMapOffset.y;
 
 	if(((GridX >= 0) && (GridX < AppState->PixelMapWidth)) &&
 	   ((GridY >= 0) && (GridY < AppState->PixelMapHeight)))
 	{
-		v4 *Pixel = (v4 *)(AppState->PixelMap + (GridY * AppState->PixelMapWidth) + GridX);
+		Result = (v4 *)(AppState->PixelMap + (GridY * AppState->PixelMapWidth) + GridX);
+	}
+
+	return(Result);
+}
+
+static void
+SetPixelMapPixelColor(struct app_state *AppState, real32 X, real32 Y, union v4 Color)
+{
+	v4 *Pixel = GetPixelMapPixelColor(AppState, X, Y);
+	if(Pixel)
+	{
 		*Pixel = Color;
 	}
 }
@@ -162,10 +186,7 @@ ExportBitmap(char *Filename, v4 *PixelMap, uint32 Width, uint32 Height, struct a
 		for(uint32 X = 0; X < Width; ++X)
 		{
 			uint32 Pixel = 0;
-			Pixel = ( (0xff << 24) |
-					  ((int32)SourceV4->r << 16) |
-					  ((int32)SourceV4->g << 8) |
-					  ((int32)SourceV4->b << 0) );
+			Pixel = V4ToU32Pixel(*SourceV4);
 			*Dest++ = Pixel;
 			SourceV4++;
 		}
@@ -176,10 +197,68 @@ ExportBitmap(char *Filename, v4 *PixelMap, uint32 Width, uint32 Height, struct a
 }
 
 static void
+UpdatePixelEditorPosition(struct app_state *AppState, struct app_input *Input)
+{
+	real32 DrawingAreaGridSizeX = AppState->EditingAreaSize.x / AppState->PixelMapZoom;
+	real32 DrawingAreaGridSizeY = AppState->EditingAreaSize.y / AppState->PixelMapZoom;
+
+	AppState->EditingAreaMapOffset.x += (Input->MouseX - Input->LastMouseX) / AppState->PixelMapZoom;
+	AppState->EditingAreaMapOffset.y += (Input->MouseY - Input->LastMouseY) / AppState->PixelMapZoom;
+
+	if(AppState->EditingAreaMapOffset.x > 0)
+	{
+		AppState->EditingAreaMapOffset.x = 0;
+	}
+	if(AppState->EditingAreaMapOffset.x < -(AppState->PixelMapWidth - DrawingAreaGridSizeX))
+	{
+		AppState->EditingAreaMapOffset.x = -(AppState->PixelMapWidth - DrawingAreaGridSizeX);
+	}
+
+	if(AppState->EditingAreaMapOffset.y > 0)
+	{
+		AppState->EditingAreaMapOffset.y = 0;
+	}
+	if(AppState->EditingAreaMapOffset.y < -(AppState->PixelMapHeight - DrawingAreaGridSizeY))
+	{
+		AppState->EditingAreaMapOffset.y = -(AppState->PixelMapHeight - DrawingAreaGridSizeY);
+	}
+}
+
+static void
 EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buffer, struct app_input *Input)
 {
 	if(!AppState->Initialized)
 	{
+		struct app_state OldAppState = *AppState;
+		AppState->EditingAreaSize = V2(700.0f, 700.0f);
+		AppState->EditingAreaOffset = V2(80.0f, 10.0f);
+		AppState->PixelMapWidth = 32;
+		AppState->PixelMapHeight = 32;
+		AppState->PixelMapZoom = AppState->EditingAreaSize.x / (real32)AppState->PixelMapWidth;
+		AppState->MinPixelMapZoom = AppState->PixelMapZoom;
+
+		uint32 PixelMapSize = AppState->PixelMapWidth * AppState->PixelMapHeight;
+		v4 *NewPixelMap = (v4 *)AppState->PlatformAllocateMemory(PixelMapSize * sizeof(v4));
+		Assert(NewPixelMap);
+
+		// TODO(rick): Handle when the new size is smaller than the old size
+		if(AppState->PixelMap)
+		{
+			CopyMemory(NewPixelMap, AppState->PixelMap, (OldAppState.PixelMapWidth * OldAppState.PixelMapHeight) * sizeof(v4));
+		}
+
+		AppState->PixelMap = NewPixelMap;
+		AppState->ColorPickerButton.Position = V2(AppState->EditingAreaOffset.x, AppState->EditingAreaOffset.y + AppState->EditingAreaSize.y + 10);
+		AppState->ColorPickerButton.Dimensions = V2(64, 64);
+		AppState->ColorPickerButton.Color = V4(0xff, 0x00, 0x00, 0xff);
+		AppState->QuickSwitchColor = AppState->ColorPickerButton;
+		// NOTE(rick): We really need some vector math functions :)
+		AppState->QuickSwitchColor.Position = V2(AppState->QuickSwitchColor.Position.x - 4, AppState->QuickSwitchColor.Position.y - 4);
+		AppState->QuickSwitchColor.Color = V4(0xff, 0xff, 0xff, 0xff);
+
+		AppState->PixelColor = AppState->ColorPickerButton.Color;
+		AppState->CustomColorDims = V2(30.0f, 30.0f);
+
 		int32 ButtonsPerRow = 8;
 		int32 ButtonRows = 0;
 		for(int32 CustomColorIndex = 0;
@@ -194,11 +273,12 @@ EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buf
 
 			struct custom_color_button *Button = AppState->CustomColorButtons + CustomColorIndex;
 			Button->Dimensions = AppState->CustomColorDims;
-			Button->Position = V2(AppState->ColorPickerButton.x + AppState->ColorPickerButton.z + 10 + ((Button->Dimensions.x + 4) * (CustomColorIndex % ButtonsPerRow)),
-								  AppState->ColorPickerButton.y + ((ButtonRows * (Button->Dimensions.y + 4))));
+			Button->Position = V2(AppState->ColorPickerButton.Position.x + AppState->ColorPickerButton.Dimensions.x + 10 + ((Button->Dimensions.x + 4) * (CustomColorIndex % ButtonsPerRow)),
+								  AppState->ColorPickerButton.Position.y + ((ButtonRows * (Button->Dimensions.y + 4))));
 			Button->Color = V4(0x00, 0x00, 0x00, 0xff);
 
 		}
+
 		AppState->Initialized = true;
 	}
 
@@ -206,16 +286,23 @@ EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buf
 	{
 		if(Input->MouseWheelScrollDirection > 0)
 		{
-			AppState->PixelMapZoom += 5;
+			AppState->PixelMapZoom = (int32)(AppState->PixelMapZoom + 5.0f);
+
+			int32 MaxPixelZoom = (int32)(AppState->MinPixelMapZoom * 5);
+			if(AppState->PixelMapZoom > MaxPixelZoom)
+			{
+				AppState->PixelMapZoom = MaxPixelZoom;
+			}
 		}
 		else
 		{
-			AppState->PixelMapZoom -= 5;
+			AppState->PixelMapZoom = (int32)(AppState->PixelMapZoom - 5.0f);
 			if(AppState->PixelMapZoom <= AppState->MinPixelMapZoom)
 			{
 				AppState->PixelMapZoom = AppState->MinPixelMapZoom;
 				AppState->EditingAreaMapOffset = V2(0.0f, 0.0f);
 			}
+			UpdatePixelEditorPosition(AppState, Input);
 		}
 	}
 
@@ -238,49 +325,52 @@ EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buf
 	{
 		AppState->PixelColor = V4(0.0f, 0.0f, 0.0f, 0xff);
 	}
+	if(Input->ButtonQuickSwitch.Tapped)
+	{
+		v4 TempColor = AppState->PixelColor;
+		AppState->PixelColor = AppState->QuickSwitchColor.Color;
+		AppState->QuickSwitchColor.Color = TempColor;
+	}
+	if(Input->ButtonEyeDropper.EndedDown)
+	{
+		OutputDebugStringA("Space is down\n");
+	}
+	if(Input->ButtonPrimary.EndedDown)
+	{
+		OutputDebugStringA("Mouse1 is down\n");
+	}
 
 	AppState->ColorPickerButtonClicked = ActionPerformedWithinRegion(Input->ButtonPrimary.EndedDown,
 																	 Input->MouseX, Input->MouseY,
-																	 AppState->ColorPickerButton.x,
-																	 AppState->ColorPickerButton.y,
-																	 AppState->ColorPickerButton.z,
-																	 AppState->ColorPickerButton.w);
+																	 AppState->ColorPickerButton.Position.x,
+																	 AppState->ColorPickerButton.Position.y,
+																	 AppState->ColorPickerButton.Dimensions.x,
+																	 AppState->ColorPickerButton.Dimensions.y);
 
 	if(ActionPerformedWithinRegion(Input->ButtonSecondary.EndedDown, Input->MouseX, Input->MouseY,
 								   AppState->EditingAreaOffset.x, AppState->EditingAreaOffset.y,
 								   AppState->EditingAreaOffset.x + AppState->EditingAreaSize.x,
 								   AppState->EditingAreaOffset.y + AppState->EditingAreaSize.y))
 	{
-		real32 DrawingAreaGridSizeX = AppState->EditingAreaSize.x / AppState->PixelMapZoom;
-		real32 DrawingAreaGridSizeY = AppState->EditingAreaSize.y / AppState->PixelMapZoom;
-
-		AppState->EditingAreaMapOffset.x += (Input->MouseX - Input->LastMouseX) / AppState->PixelMapZoom;
-		AppState->EditingAreaMapOffset.y += (Input->MouseY - Input->LastMouseY) / AppState->PixelMapZoom;
-
-		if(AppState->EditingAreaMapOffset.x > 0)
-		{
-			AppState->EditingAreaMapOffset.x = 0;
-		}
-		if(AppState->EditingAreaMapOffset.x < -(AppState->PixelMapWidth - DrawingAreaGridSizeX))
-		{
-			AppState->EditingAreaMapOffset.x = -(AppState->PixelMapWidth - DrawingAreaGridSizeX);
-		}
-
-		if(AppState->EditingAreaMapOffset.y > 0)
-		{
-			AppState->EditingAreaMapOffset.y = 0;
-		}
-		if(AppState->EditingAreaMapOffset.y < -(AppState->PixelMapHeight - DrawingAreaGridSizeY))
-		{
-			AppState->EditingAreaMapOffset.y = -(AppState->PixelMapHeight - DrawingAreaGridSizeY);
-		}
+		UpdatePixelEditorPosition(AppState, Input);
 	}
 	else if(ActionPerformedWithinRegion(Input->ButtonPrimary.EndedDown, Input->MouseX, Input->MouseY,
 										AppState->EditingAreaOffset.x, AppState->EditingAreaOffset.y,
 										AppState->EditingAreaOffset.x + AppState->EditingAreaSize.x,
 										AppState->EditingAreaOffset.y + AppState->EditingAreaSize.y))
 	{
-		SetPixelMapPixelColor(AppState, Input->MouseX, Input->MouseY, AppState->PixelColor);
+		if(Input->ButtonEyeDropper.EndedDown)
+		{
+			v4 *Pixel = GetPixelMapPixelColor(AppState, Input->MouseX, Input->MouseY);
+			if(Pixel != NULL)
+			{
+				AppState->PixelColor = *Pixel;
+			}
+		}
+		else
+		{
+			SetPixelMapPixelColor(AppState, Input->MouseX, Input->MouseY, AppState->PixelColor);
+		}
 	}
 
 	for(int32 CustomColorIndex = 0;
@@ -323,8 +413,11 @@ EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buf
 		}
 	}
 
-	DrawRectangle(Buffer, AppState->ColorPickerButton.x, AppState->ColorPickerButton.y,
-				  AppState->ColorPickerButton.z, AppState->ColorPickerButton.w,
+	DrawRectangle(Buffer, AppState->QuickSwitchColor.Position.x, AppState->QuickSwitchColor.Position.y,
+				  AppState->QuickSwitchColor.Dimensions.x, AppState->QuickSwitchColor.Dimensions.y,
+				  AppState->QuickSwitchColor.Color);
+	DrawRectangle(Buffer, AppState->ColorPickerButton.Position.x, AppState->ColorPickerButton.Position.y,
+				  AppState->ColorPickerButton.Dimensions.x, AppState->ColorPickerButton.Dimensions.y,
 				  AppState->PixelColor);
 
 	for(int32 CustomColorIndex = 0;
