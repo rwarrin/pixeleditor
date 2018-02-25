@@ -90,6 +90,13 @@ struct app_input
 			struct input_button_state ButtonEraser;
 			struct input_button_state ButtonQuickSwitch;
 			struct input_button_state ButtonEyeDropper;
+
+			struct input_button_state ButtonSize1;  // 32
+			struct input_button_state ButtonSize2;  // 64
+			struct input_button_state ButtonSize3;  // 128
+			struct input_button_state ButtonSize4;  // 256
+			struct input_button_state ButtonSize5;  // 512
+			struct input_button_state ButtonSize6;  // 1024
 		};
 	};
 };
@@ -159,6 +166,8 @@ typedef PLATFORM_FREE_MEMORY(platform_free_memory);
 struct app_state
 {
 	bool32 Initialized;
+	bool32 EyeDropperModeEnabled;
+
 	uint32 PixelMapWidth;
 	uint32 PixelMapHeight;
 	real32 PixelMapZoom;

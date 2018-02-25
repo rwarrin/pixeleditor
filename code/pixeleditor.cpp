@@ -152,7 +152,7 @@ ActionPerformedWithinRegion(bool32 InputState, real32 MouseX, real32 MouseY,
 	if(InputState)
 	{
 		if(((MouseX >= X) && (MouseX <= X + Width)) &&
-		((MouseY >= Y) && (MouseY <= Y + Height)))
+		   ((MouseY >= Y) && (MouseY <= Y + Height)))
 		{
 			Result = true;
 		}
@@ -202,8 +202,11 @@ UpdatePixelEditorPosition(struct app_state *AppState, struct app_input *Input)
 	real32 DrawingAreaGridSizeX = AppState->EditingAreaSize.x / AppState->PixelMapZoom;
 	real32 DrawingAreaGridSizeY = AppState->EditingAreaSize.y / AppState->PixelMapZoom;
 
-	AppState->EditingAreaMapOffset.x += (Input->MouseX - Input->LastMouseX) / AppState->PixelMapZoom;
-	AppState->EditingAreaMapOffset.y += (Input->MouseY - Input->LastMouseY) / AppState->PixelMapZoom;
+	if(Input != 0)
+	{
+		AppState->EditingAreaMapOffset.x += (Input->MouseX - Input->LastMouseX) / AppState->PixelMapZoom;
+		AppState->EditingAreaMapOffset.y += (Input->MouseY - Input->LastMouseY) / AppState->PixelMapZoom;
+	}
 
 	if(AppState->EditingAreaMapOffset.x > 0)
 	{
@@ -225,29 +228,38 @@ UpdatePixelEditorPosition(struct app_state *AppState, struct app_input *Input)
 }
 
 static void
+ResizeCanvas(struct app_state *AppState, int32 CanvasWidth, int32 CanvasHeight)
+{
+	if(AppState->PixelMap)
+	{
+		AppState->PlatformFreeMemory(AppState->PixelMap);
+	}
+
+	AppState->EditingAreaSize = V2(700.0f, 700.0f);
+	AppState->EditingAreaOffset = V2(80.0f, 10.0f);
+	AppState->PixelMapWidth = CanvasWidth;
+	AppState->PixelMapHeight = CanvasHeight;
+	AppState->PixelMapZoom = AppState->EditingAreaSize.x / (real32)AppState->PixelMapWidth;
+	AppState->MinPixelMapZoom = AppState->PixelMapZoom;
+	if(AppState->PixelMapZoom < 5.0f)
+	{
+		AppState->PixelMapZoom = 5.0f;
+		AppState->MinPixelMapZoom = 5.0f;
+	}
+
+	uint32 PixelMapSize = AppState->PixelMapWidth * AppState->PixelMapHeight;
+	AppState->PixelMap = (v4 *)AppState->PlatformAllocateMemory(PixelMapSize * sizeof(v4));
+	Assert(AppState->PixelMap);
+
+	UpdatePixelEditorPosition(AppState, NULL);
+}
+
+static void
 EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buffer, struct app_input *Input)
 {
 	if(!AppState->Initialized)
 	{
-		struct app_state OldAppState = *AppState;
-		AppState->EditingAreaSize = V2(700.0f, 700.0f);
-		AppState->EditingAreaOffset = V2(80.0f, 10.0f);
-		AppState->PixelMapWidth = 32;
-		AppState->PixelMapHeight = 32;
-		AppState->PixelMapZoom = AppState->EditingAreaSize.x / (real32)AppState->PixelMapWidth;
-		AppState->MinPixelMapZoom = AppState->PixelMapZoom;
-
-		uint32 PixelMapSize = AppState->PixelMapWidth * AppState->PixelMapHeight;
-		v4 *NewPixelMap = (v4 *)AppState->PlatformAllocateMemory(PixelMapSize * sizeof(v4));
-		Assert(NewPixelMap);
-
-		// TODO(rick): Handle when the new size is smaller than the old size
-		if(AppState->PixelMap)
-		{
-			CopyMemory(NewPixelMap, AppState->PixelMap, (OldAppState.PixelMapWidth * OldAppState.PixelMapHeight) * sizeof(v4));
-		}
-
-		AppState->PixelMap = NewPixelMap;
+		ResizeCanvas(AppState, 64, 64);
 		AppState->ColorPickerButton.Position = V2(AppState->EditingAreaOffset.x, AppState->EditingAreaOffset.y + AppState->EditingAreaSize.y + 10);
 		AppState->ColorPickerButton.Dimensions = V2(64, 64);
 		AppState->ColorPickerButton.Color = V4(0xff, 0x00, 0x00, 0xff);
@@ -282,17 +294,36 @@ EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buf
 		AppState->Initialized = true;
 	}
 
+	if(Input->ButtonSize1.Tapped)
+	{
+		ResizeCanvas(AppState, 32, 32);
+	}
+	if(Input->ButtonSize2.Tapped)
+	{
+		ResizeCanvas(AppState, 64, 64);
+	}
+	if(Input->ButtonSize3.Tapped)
+	{
+		ResizeCanvas(AppState, 128, 128);
+	}
+	if(Input->ButtonSize4.Tapped)
+	{
+		ResizeCanvas(AppState, 256, 256);
+	}
+	if(Input->ButtonSize5.Tapped)
+	{
+		ResizeCanvas(AppState, 512, 512);
+	}
+	if(Input->ButtonSize6.Tapped)
+	{
+		ResizeCanvas(AppState, 1024, 1024);
+	}
+
 	if(Input->MouseWheelScrollDirection != 0)
 	{
 		if(Input->MouseWheelScrollDirection > 0)
 		{
 			AppState->PixelMapZoom = (int32)(AppState->PixelMapZoom + 5.0f);
-
-			int32 MaxPixelZoom = (int32)(AppState->MinPixelMapZoom * 5);
-			if(AppState->PixelMapZoom > MaxPixelZoom)
-			{
-				AppState->PixelMapZoom = MaxPixelZoom;
-			}
 		}
 		else
 		{
@@ -331,13 +362,9 @@ EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buf
 		AppState->PixelColor = AppState->QuickSwitchColor.Color;
 		AppState->QuickSwitchColor.Color = TempColor;
 	}
-	if(Input->ButtonEyeDropper.EndedDown)
+	if(Input->ButtonEyeDropper.Tapped)
 	{
-		OutputDebugStringA("Space is down\n");
-	}
-	if(Input->ButtonPrimary.EndedDown)
-	{
-		OutputDebugStringA("Mouse1 is down\n");
+		AppState->EyeDropperModeEnabled = !AppState->EyeDropperModeEnabled;
 	}
 
 	AppState->ColorPickerButtonClicked = ActionPerformedWithinRegion(Input->ButtonPrimary.EndedDown,
@@ -349,18 +376,18 @@ EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buf
 
 	if(ActionPerformedWithinRegion(Input->ButtonSecondary.EndedDown, Input->MouseX, Input->MouseY,
 								   AppState->EditingAreaOffset.x, AppState->EditingAreaOffset.y,
-								   AppState->EditingAreaOffset.x + AppState->EditingAreaSize.x,
-								   AppState->EditingAreaOffset.y + AppState->EditingAreaSize.y))
+								   AppState->EditingAreaSize.x, AppState->EditingAreaSize.y))
 	{
 		UpdatePixelEditorPosition(AppState, Input);
 	}
 	else if(ActionPerformedWithinRegion(Input->ButtonPrimary.EndedDown, Input->MouseX, Input->MouseY,
 										AppState->EditingAreaOffset.x, AppState->EditingAreaOffset.y,
-										AppState->EditingAreaOffset.x + AppState->EditingAreaSize.x,
-										AppState->EditingAreaOffset.y + AppState->EditingAreaSize.y))
+										AppState->EditingAreaSize.x, AppState->EditingAreaSize.y))
 	{
-		if(Input->ButtonEyeDropper.EndedDown)
+		if(AppState->EyeDropperModeEnabled)
 		{
+			// TODO(rick): Add some sort of visual queue that we're in eye
+			// dropper mode
 			v4 *Pixel = GetPixelMapPixelColor(AppState, Input->MouseX, Input->MouseY);
 			if(Pixel != NULL)
 			{
@@ -380,8 +407,7 @@ EditorUpdateAndRender(struct app_state *AppState, struct game_screen_buffer *Buf
 		struct custom_color_button Button = *(AppState->CustomColorButtons + CustomColorIndex);
 		if(ActionPerformedWithinRegion(Input->ButtonPrimary.EndedDown, Input->MouseX, Input->MouseY,
 									   Button.Position.x, Button.Position.y,
-									   Button.Position.x + Button.Dimensions.x,
-									   Button.Position.y + Button.Dimensions.y))
+									   Button.Dimensions.x, Button.Dimensions.y))
 		{
 			AppState->PixelColor = Button.Color;
 		}

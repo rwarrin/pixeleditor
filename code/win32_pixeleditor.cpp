@@ -156,9 +156,33 @@ Win32ProcessPendingMessages(struct app_input *Input)
 					{
 						Win32ProcessInputMessage(&Input->ButtonQuickSwitch, IsDown);
 					}
-					if(VKCode == VK_SPACE)
+					if(VKCode == 'P')
 					{
 						Win32ProcessInputMessage(&Input->ButtonEyeDropper, IsDown);
+					}
+					if(VKCode == 0x31)
+					{
+						Win32ProcessInputMessage(&Input->ButtonSize1, IsDown);
+					}
+					if(VKCode == 0x32)
+					{
+						Win32ProcessInputMessage(&Input->ButtonSize2, IsDown);
+					}
+					if(VKCode == 0x33)
+					{
+						Win32ProcessInputMessage(&Input->ButtonSize3, IsDown);
+					}
+					if(VKCode == 0x34)
+					{
+						Win32ProcessInputMessage(&Input->ButtonSize4, IsDown);
+					}
+					if(VKCode == 0x35)
+					{
+						Win32ProcessInputMessage(&Input->ButtonSize5, IsDown);
+					}
+					if(VKCode == 0x36)
+					{
+						Win32ProcessInputMessage(&Input->ButtonSize6, IsDown);
 					}
 				}
 			} break;
@@ -208,7 +232,12 @@ PLATFORM_FREE_MEMORY(Win32FreeMemory)
 {
 	if(Memory)
 	{
-		VirtualFree(Memory, 0, MEM_RELEASE | MEM_DECOMMIT);
+		int ret = VirtualFree(Memory, 0, MEM_RELEASE);
+		if(!ret)
+		{
+			DWORD error = GetLastError();
+			Assert(!"not good");
+		}
 	}
 }
 
