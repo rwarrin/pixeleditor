@@ -232,12 +232,7 @@ PLATFORM_FREE_MEMORY(Win32FreeMemory)
 {
 	if(Memory)
 	{
-		int ret = VirtualFree(Memory, 0, MEM_RELEASE);
-		if(!ret)
-		{
-			DWORD error = GetLastError();
-			Assert(!"not good");
-		}
+		VirtualFree(Memory, 0, MEM_RELEASE);
 	}
 }
 
